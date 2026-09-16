@@ -10,6 +10,7 @@ const { setJobManager } = require('./services/scheduler');
 const cameraRoutes = require('./routes/cameras');
 const captureRoutes = require('./routes/captures');
 const scheduleRoutes = require('./routes/schedules');
+const settingsRoutes = require('./routes/settings');
 
 const app = express();
 const server = http.createServer(app);
@@ -20,6 +21,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api/cameras', cameraRoutes);
 app.use('/api/captures', captureRoutes);
 app.use('/api/schedules', scheduleRoutes);
+app.use('/api/settings', settingsRoutes);
 
 const clients = new Set();
 

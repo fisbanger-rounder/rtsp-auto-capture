@@ -203,6 +203,45 @@ function downloadCapture(captureId) {
   a.remove();
 }
 
+function loadSettings() {
+  fetch('/api/settings')
+    .then(r => r.json())
+    .then(s => {
+      document.getElementById('uploadUrl').value = s.upload_url || '';
+      document.getElementById('uploadField').value = s.upload_field || '';
+      document.getElementById('uploadEnabled').checked = s.upload_enabled === '1';
+      document.getElementById('uploadManual').checked = s.upload_manual === '1';
+      document.getElementById('uploadSchedule').checked = s.upload_schedule === '1';
+    })
+    .catch(err => console.error('Failed to load settings:', err));
+}
+
+function saveSettings() {
+  const status = document.getElementById('settingsStatus');
+  const body = {
+    upload_url: document.getElementById('uploadUrl').value.trim(),
+    upload_field: document.getElementById('uploadField').value.trim(),
+    upload_enabled: document.getElementById('uploadEnabled').checked ? '1' : '0',
+    upload_manual: document.getElementById('uploadManual').checked ? '1' : '0',
+    upload_schedule: document.getElementById('uploadSchedule').checked ? '1' : '0'
+  };
+  fetch('/api/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+    .then(r => r.json())
+    .then(s => {
+      status.textContent = 'Saved';
+      status.className = 'hint';
+      setTimeout(() => { status.textContent = ''; }, 3000);
+    })
+    .catch(err => {
+      status.textContent = 'Save failed';
+      status.className = 'hint error';
+    });
+}
+
 function editCamera(id) {
   const camera = document.querySelector(`.camera-card[data-id="${id}"]`);
   if (!camera) return;
@@ -253,10 +292,16 @@ function triggerCapture(cameraId) {
     body: JSON.stringify({ camera_id: cameraId })
   })
     .then(r => r.json().then(data => {
-      status.textContent = 'Capture saved: ' + (data.filePath || data.file_path);
+      let msg = 'Capture saved: ' + (data.filePath || data.file_path);
+      if (data.upload_error) {
+        msg += ' (upload failed: ' + data.upload_error + ')';
+      } else if (data.uploaded) {
+        msg += ' (uploaded)';
+      }
+      status.textContent = msg;
       if (data.id) downloadCapture(data.id);
       loadCaptureHistory();
-      setTimeout(() => { status.textContent = ''; status.className = ''; }, 3000);
+      setTimeout(() => { status.textContent = ''; status.className = ''; }, 4000);
     }))
     .catch(err => {
       status.textContent = 'Capture failed: ' + err.message;
@@ -313,6 +358,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('historyCameraFilter').addEventListener('change', () => {
     loadCaptureHistory(document.getElementById('historyCameraFilter').value);
   });
+  document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
   loadCameras();
   loadCaptureHistory();
+  loadSettings();
 });

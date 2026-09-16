@@ -1,6 +1,6 @@
 # RTSP Auto-Capture
 
-A self-hosted web app for monitoring RTSP CCTV streams and capturing snapshots on demand or on a schedule. It probes each camera for liveness, pulls single JPEG frames with `ffmpeg`, stores capture history in SQLite, and pushes status changes to the browser over a WebSocket.
+A self-hosted web app for monitoring RTSP CCTV streams and capturing snapshots on demand or on a schedule. It probes each camera for liveness, pulls single JPEG frames with `ffmpeg`, stores capture history in SQLite, pushes status changes to the browser over a WebSocket, and can forward every capture to a remote HTTP server.
 
 ## Features
 
@@ -8,6 +8,7 @@ A self-hosted web app for monitoring RTSP CCTV streams and capturing snapshots o
 - Live online/offline status for each stream, refreshed every 15 seconds.
 - Manual one-click frame capture.
 - Scheduled captures per camera (daily time or day-of-week, backed by cron).
+- Upload every capture to a remote HTTP endpoint (manual and scheduled uploads toggle separately).
 - Capture history with filter and download.
 - Dark single-page UI with no build step.
 
@@ -19,6 +20,7 @@ The server does four things in parallel:
 2. **Monitoring loop** — every 15 seconds (`config.monitorIntervalMs`) `server.js` reads all cameras and runs `monitorStreams`, which calls `ffprobe` against each RTSP URL. Results are written to the `stream_status` table and broadcast to every connected browser.
 3. **Capture** — a capture request (manual or scheduled) runs `triggerCapture` in `services/captureService.js`. It probes the stream, then runs `ffmpeg -vframes 1` to save a JPEG under `captures/<camera_id>/<name>_<timestamp>.jpg`, and inserts a row into `captures`.
 4. **Scheduler** — `services/scheduler.js` loads every enabled row from `schedules` and registers a `node-cron` job. When a job fires it calls `triggerCapture` with `triggered_by = 'schedule'` and broadcasts a `capture_done` message.
+5. **Uploader** — after a capture is saved, `captureService` POSTs the JPEG to the configured upload server as `multipart/form-data` (using Node's built-in `fetch`/`FormData`). Uploads are gated by the settings below and are non-fatal: if the server is unreachable, the capture is still saved and the error is logged.
 
 ### Capture flow, end to end
 
@@ -29,6 +31,7 @@ browser "Capture" button
   -> probeStream(url)        # ffprobe, is the camera reachable?
   -> captureFrame(...)       # ffmpeg, one JPEG to captures/<id>/
   -> INSERT INTO captures
+  -> upload to remote server # multipart/form-data, if enabled
   -> response { id, filePath } -> browser auto-downloads
 ```
 
@@ -63,20 +66,23 @@ The only dependency that is not installed by `npm install` is **ffmpeg**. The ap
 - macOS: `brew install ffmpeg`
 - Windows: a full build such as [gyan.dev FFmpeg](https://www.gyan.dev/ffmpeg/builds/)
 
+Image uploads use Node's built-in `fetch` and `FormData`, so no HTTP client or multipart library is required.
+
 ## Project structure
 
 ```
 config.js                 # port, dirs, polling interval, stream timeout
 server.js                 # Express + WebSocket + monitoring loop entry point
-data/store.js             # better-sqlite3 connection + schema
+data/store.js             # better-sqlite3 connection + schema + settings store
 services/
   rtspMonitor.js          # ffprobe probe + ffmpeg frame capture
-  captureService.js       # triggerCapture, getCaptureHistory
+  captureService.js       # triggerCapture, getCaptureHistory, uploadImage
   scheduler.js            # cron job manager (add/remove/toggle/reload)
 routes/
   cameras.js              # /api/cameras CRUD
   captures.js             # /api/captures history + trigger + download
   schedules.js            # /api/schedules CRUD + reload
+  settings.js             # /api/settings read/update (upload config)
 public/
   index.html, css/style.css, js/app.js, js/websocket.js
 data/rtsp.db              # SQLite (created on first run)
@@ -119,6 +125,7 @@ docker run --network host --rm -it $(docker build -q .)
 3. **Manual capture** — click `Capture` on a card. The app probes the stream, saves a JPEG, and downloads it.
 4. **Schedule** — click `+ Add Schedule`, pick a camera, a time, and a day (or "Every day"). The app converts your choice into a cron expression and registers a live `node-cron` job.
 5. **History** — the Capture History section lists every capture with camera, trigger (`manual` or `schedule`), timestamp, and a Download button. Filter by camera using the dropdown.
+6. **Upload** — in Upload Settings, set the endpoint URL and the multipart field name, and choose whether manual captures, scheduled captures, or both are sent. Click Save; the settings persist in SQLite.
 
 ## API
 
@@ -137,6 +144,8 @@ docker run --network host --rm -it $(docker build -q .)
 | PUT | `/api/schedules/:id` | `{ enabled }` | Enable/disable |
 | DELETE | `/api/schedules/:id` | — | Delete schedule (204) |
 | POST | `/api/schedules/reload` | — | Re-register all cron jobs |
+| GET | `/api/settings` | — | Read upload settings |
+| PUT | `/api/settings` | `{ upload_url, upload_field, upload_enabled, upload_manual, upload_schedule }` | Update upload settings |
 
 ## Cron expressions
 
@@ -155,9 +164,30 @@ The UI builds these for you, but you can POST any valid expression. Examples:
 
 Day-of-week uses `0` or `7` for Sunday, `1` for Monday, through `6` for Saturday.
 
+## Upload
+
+Every capture can be forwarded to a remote HTTP endpoint as `multipart/form-data`. The settings are editable in the **Upload Settings** section of the web app (or via `PUT /api/settings`) and stored in the `settings` table.
+
+| Setting | Default | Meaning |
+|---------|---------|---------|
+| `upload_enabled` | `1` | Master switch for all uploads |
+| `upload_url` | `http://192.168.68.102:8000/api/v1/upload-image` | Endpoint that receives the image |
+| `upload_field` | `image` | Name of the multipart form field carrying the file |
+| `upload_manual` | `1` | Upload captures triggered manually |
+| `upload_schedule` | `1` | Upload captures triggered by a schedule |
+
+Request details:
+
+- Method `POST`, `Content-Type: multipart/form-data`.
+- The file is sent under the configured `upload_field` name (default `image`).
+- The filename is `"<camera_source>_<timestamp>.jpg"`, for example `Garage_2026-09-16T14-35-33.jpg`.
+- Timeout is 15 seconds. A failed upload never fails the capture: the image stays on disk, the row stays in `captures`, and the error is logged to the server console and returned as `upload_error` in the trigger response.
+
+Point `upload_url` at any server that accepts a multipart file upload and responds `2xx`.
+
 ## Configuration
 
-Everything is in `config.js`:
+Server-level settings live in `config.js` (upload settings are stored in SQLite, see [Upload](#upload)):
 
 | Key | Default | Meaning |
 |-----|---------|---------|

@@ -81,6 +81,27 @@
         <div id="scheduleList" class="schedule-list"></div>
       </section>
 
+      <section class="settings-section">
+        <div class="section-header">
+          <h2>Upload Settings</h2>
+        </div>
+        <div class="form-card">
+          <div class="form-row">
+            <input type="text" id="uploadUrl" placeholder="http://192.168.68.102:8000/api/v1/upload-image">
+            <input type="text" id="uploadField" placeholder="field name (e.g. image)">
+          </div>
+          <div class="form-row">
+            <label><input type="checkbox" id="uploadEnabled" checked> Enable upload</label>
+            <label><input type="checkbox" id="uploadManual" checked> Send manual captures</label>
+            <label><input type="checkbox" id="uploadSchedule" checked> Send scheduled captures</label>
+          </div>
+          <div class="form-row">
+            <button class="btn btn-primary" id="saveSettingsBtn">Save</button>
+            <span id="settingsStatus" class="hint"></span>
+          </div>
+        </div>
+      </section>
+
       <section class="history-section">
         <div class="section-header">
           <h2>Capture History</h2>

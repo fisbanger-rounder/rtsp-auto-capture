@@ -1,7 +1,50 @@
 const path = require('path');
+const fs = require('fs');
 const config = require('../config');
-const { db } = require('../data/store');
+const { db, getSettings } = require('../data/store');
 const { probeStream, captureFrame } = require('./rtspMonitor');
+
+// Sends the captured JPEG as multipart/form-data to the configured upload server.
+// fieldName is configurable (settings.upload_field). fileName is
+// "<camera_source>_<timestamp>.jpg" so the receiver always knows the source and time.
+async function uploadImage(filePath, uploadUrl, options = {}) {
+  const fieldName = options.fieldName || 'file';
+  const fileName = options.fileName || path.basename(filePath);
+  const data = await fs.promises.readFile(filePath);
+  const form = new FormData();
+  form.append(fieldName, new Blob([data], { type: 'image/jpeg' }), fileName);
+  const res = await fetch(uploadUrl, {
+    method: 'POST',
+    body: form,
+    signal: AbortSignal.timeout(15000)
+  });
+  if (!res.ok) {
+    throw new Error(`upload server returned HTTP ${res.status}`);
+  }
+  return res.status;
+}
+
+async function maybeUpload(filePath, triggeredBy, captureId) {
+  const settings = getSettings();
+  const wanted =
+    settings.upload_enabled === '1' &&
+    ((triggeredBy === 'manual' && settings.upload_manual === '1') ||
+      (triggeredBy === 'schedule' && settings.upload_schedule === '1'));
+
+  if (!wanted || !settings.upload_url) return { uploaded: false, upload_error: null };
+
+  try {
+    await uploadImage(filePath, settings.upload_url, {
+      fieldName: settings.upload_field || 'image',
+      // disk basename is already "<camera_source>_<timestamp>.jpg"
+      fileName: path.basename(filePath)
+    });
+    return { uploaded: true, upload_error: null };
+  } catch (err) {
+    console.error(`Upload failed for capture ${captureId}:`, err.message);
+    return { uploaded: false, upload_error: err.message };
+  }
+}
 
 async function triggerCapture(cameraId, triggeredBy) {
   const camera = db.prepare('SELECT id, name, rtsp_url, is_active FROM cameras WHERE id = ?').get(cameraId);
@@ -25,7 +68,16 @@ async function triggerCapture(cameraId, triggeredBy) {
     VALUES (?, ?, ?)
   `).run(cameraId, relativePath, triggeredBy || 'manual');
 
-  return { id: info.lastInsertRowid, cameraId, filePath: relativePath, timestamp: new Date().toISOString() };
+  const upload = await maybeUpload(filePath, triggeredBy || 'manual', info.lastInsertRowid);
+
+  return {
+    id: info.lastInsertRowid,
+    cameraId,
+    filePath: relativePath,
+    timestamp: new Date().toISOString(),
+    uploaded: upload.uploaded,
+    upload_error: upload.upload_error
+  };
 }
 
 function getCaptureHistory(cameraId, limit) {
@@ -44,4 +96,4 @@ function getCaptureHistory(cameraId, limit) {
   return db.prepare(query).all(...params);
 }
 
-module.exports = { triggerCapture, getCaptureHistory };
+module.exports = { triggerCapture, getCaptureHistory, uploadImage };

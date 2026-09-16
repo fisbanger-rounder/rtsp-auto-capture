@@ -38,6 +38,37 @@ db.exec(`
     last_changed DATETIME,
     FOREIGN KEY (camera_id) REFERENCES cameras(id) ON DELETE CASCADE
   );
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
 `);
 
-module.exports = { db };
+const DEFAULT_SETTINGS = {
+  upload_enabled: '1',
+  upload_url: 'http://192.168.68.102:8000/api/v1/upload-image',
+  upload_field: 'image',
+  upload_manual: '1',
+  upload_schedule: '1'
+};
+
+const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
+for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
+  insertSetting.run(key, value);
+}
+
+function getSettings() {
+  const rows = db.prepare('SELECT key, value FROM settings').all();
+  const settings = {};
+  for (const row of rows) settings[row.key] = row.value;
+  return settings;
+}
+
+function setSetting(key, value) {
+  db.prepare(`
+    INSERT INTO settings (key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(key, String(value));
+}
+
+module.exports = { db, getSettings, setSetting };
