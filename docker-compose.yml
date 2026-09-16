@@ -1,0 +1,13 @@
+services:
+  rtsp:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - rtsp-data:/app/data
+      - rtsp-captures:/app/captures
+    restart: unless-stopped
+
+volumes:
+  rtsp-data:
+  rtsp-captures:

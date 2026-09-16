@@ -1,0 +1,16 @@
+{
+  "name": "rtsp-auto-capture",
+  "version": "1.0.0",
+  "description": "Web app for monitoring RTSP CCTV streams with scheduled auto-capture",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.2.0",
+    "express": "^5.1.0",
+    "node-cron": "^4.2.2",
+    "ws": "^8.18.3"
+  }
+}

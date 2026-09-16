@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RTSP CCTV Monitor</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>RTSP CCTV Monitor</h1>
+      <p class="subtitle">Monitor & auto-capture from RTSP streams</p>
+    </header>
+
+    <main>
+      <section class="cameras-section">
+        <div class="section-header">
+          <h2>Cameras</h2>
+          <button id="addCameraBtn" class="btn btn-primary">+ Add Camera</button>
+        </div>
+
+        <div id="cameraForm" class="form-card hidden">
+          <h3>Add / Edit Camera</h3>
+          <input type="hidden" id="editCameraId">
+          <div class="form-row">
+            <input type="text" id="cameraName" placeholder="Camera Name" required>
+            <input type="text" id="cameraUrl" placeholder="rtsp://..." required>
+          </div>
+          <div class="form-row">
+            <label><input type="checkbox" id="cameraActive" checked> Active</label>
+            <div>
+              <button class="btn btn-primary" id="saveCameraBtn">Save</button>
+              <button class="btn btn-secondary" id="cancelCameraBtn">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="cameraList" class="camera-grid"></div>
+      </section>
+
+      <section class="capture-section">
+        <div class="section-header">
+          <h2>Manual Capture</h2>
+        </div>
+        <div id="captureStatus"></div>
+      </section>
+
+      <section class="schedule-section">
+        <div class="section-header">
+          <h2>Auto-Capture Schedules</h2>
+          <button id="addScheduleBtn" class="btn btn-primary">+ Add Schedule</button>
+        </div>
+
+        <div id="scheduleForm" class="form-card hidden">
+          <h3>Add Schedule</h3>
+          <input type="hidden" id="editScheduleId">
+          <div class="form-row">
+            <select id="scheduleCamera"></select>
+            <input type="time" id="scheduleTime" required>
+            <select id="scheduleDay">
+              <option value="*">Every day</option>
+              <option value="1">Monday</option>
+              <option value="2">Tuesday</option>
+              <option value="3">Wednesday</option>
+              <option value="4">Thursday</option>
+              <option value="5">Friday</option>
+              <option value="6">Saturday</option>
+              <option value="0">Sunday</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <span class="hint">Time in 24-hour format (HH:MM)</span>
+            <div>
+              <button class="btn btn-primary" id="saveScheduleBtn">Save</button>
+              <button class="btn btn-secondary" id="cancelScheduleBtn">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="scheduleList" class="schedule-list"></div>
+      </section>
+
+      <section class="history-section">
+        <div class="section-header">
+          <h2>Capture History</h2>
+          <select id="historyCameraFilter">
+            <option value="">All Cameras</option>
+          </select>
+        </div>
+        <div id="historyList" class="history-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/js/websocket.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
