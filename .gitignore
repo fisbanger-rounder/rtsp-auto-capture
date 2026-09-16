@@ -2,8 +2,10 @@
 node_modules/
 jspm_packages/
 
-# Local runtime data and captured frames
-data/
+# Local runtime data (keep data/store.js tracked) and captured frames
+data/*.db
+data/*.db-wal
+data/*.db-shm
 captures/
 
 # Environment
