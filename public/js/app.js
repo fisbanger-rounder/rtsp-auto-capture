@@ -292,6 +292,12 @@ function triggerCapture(cameraId) {
     body: JSON.stringify({ camera_id: cameraId })
   })
     .then(r => r.json().then(data => {
+      if (!r.ok) {
+        status.textContent = 'Capture failed: ' + (data.error || r.status);
+        status.className = 'error';
+        setTimeout(() => { status.textContent = ''; status.className = ''; }, 6000);
+        return;
+      }
       let msg = 'Capture saved: ' + (data.filePath || data.file_path);
       if (data.upload_error) {
         msg += ' (upload failed: ' + data.upload_error + ')';

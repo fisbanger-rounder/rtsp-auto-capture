@@ -13,7 +13,7 @@ function probeStream(rtspUrl, timeoutMs) {
     const timeout = timeoutMs || config.streamTimeoutSeconds * 1000;
     execFile(
       'ffprobe',
-      ['-v', 'quiet', '-print_format', 'json', '-show_streams', '-show_error', rtspUrl],
+      ['-v', 'quiet', '-rtsp_transport', 'tcp', '-print_format', 'json', '-show_streams', '-show_error', rtspUrl],
       { timeout },
       (error) => resolve(!error)
     );
@@ -31,7 +31,7 @@ function captureFrame(rtspUrl, cameraName, cameraId) {
     const timeoutMicro = config.streamTimeoutSeconds * 1000000;
     execFile(
       'ffmpeg',
-      ['-y', '-timeout', String(timeoutMicro), '-i', rtspUrl, '-vframes', '1', '-q:v', '2', filePath],
+      ['-y', '-timeout', String(timeoutMicro), '-rtsp_transport', 'tcp', '-i', rtspUrl, '-vframes', '1', '-q:v', '2', filePath],
       { timeout: config.streamTimeoutSeconds * 1000 + 5000 },
       (error) => {
         if (error) reject(error);
