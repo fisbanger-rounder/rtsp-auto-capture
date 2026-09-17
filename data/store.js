@@ -47,8 +47,8 @@ db.exec(`
 
 const DEFAULT_SETTINGS = {
   upload_enabled: '1',
-  upload_url: 'http://192.168.68.102:8000/api/v1/upload-image',
-  upload_field: 'image',
+  upload_url: 'http://host.docker.internal:8000/api/v1/upload-image',
+  upload_field: 'file',
   upload_manual: '1',
   upload_schedule: '1'
 };
