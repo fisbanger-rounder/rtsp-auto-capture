@@ -79,6 +79,7 @@ function renderCameras(cameras) {
         <div class="camera-actions">
           <button class="btn btn-small btn-warning" onclick="triggerCapture(${c.id})">Capture</button>
           <button class="btn btn-small btn-secondary" onclick="editCamera(${c.id})">Edit</button>
+          <button class="btn btn-small btn-danger" onclick="deleteCamera(${c.id})">Delete</button>
         </div>
       </div>
     `;
@@ -281,6 +282,21 @@ function addCamera() {
   document.getElementById('cameraForm').classList.remove('hidden');
 }
 
+function deleteCamera(cameraId) {
+  const card = document.querySelector(`.camera-card[data-id="${cameraId}"]`);
+  const name = card ? card.querySelector('h3').textContent : cameraId;
+  if (!confirm(`Delete camera "${name}"? Its schedules and capture history will also be removed.`)) return;
+
+  fetch(`/api/cameras/${cameraId}`, { method: 'DELETE' })
+    .then(r => {
+      if (!r.ok) return r.json().then(d => { throw new Error(d.error || r.status); });
+      loadCameras();
+      loadSchedules();
+      loadCaptureHistory();
+    })
+    .catch(err => alert('Failed to delete camera: ' + err.message));
+}
+
 function triggerCapture(cameraId) {
   const status = document.getElementById('captureStatus');
   status.textContent = 'Capturing...';
@@ -316,10 +332,50 @@ function triggerCapture(cameraId) {
     });
 }
 
+function captureAll() {
+  const status = document.getElementById('captureStatus');
+  status.textContent = 'Capturing all cameras...';
+  status.className = 'success';
+
+  fetch('/api/cameras')
+    .then(r => r.json())
+    .then(cameras => {
+      const active = cameras.filter(c => c.is_active === 1 || c.is_active === true);
+      if (!active.length) {
+        status.textContent = 'No active cameras';
+        status.className = 'error';
+        setTimeout(() => { status.textContent = ''; status.className = ''; }, 4000);
+        return;
+      }
+      return Promise.allSettled(active.map(c =>
+        fetch('/api/captures/trigger', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ camera_id: c.id })
+        }).then(r => r.json().then(d => ({ ok: r.ok, name: c.name, error: d.error })))
+      )).then(results => {
+        const ok = results.filter(r => r.status === 'fulfilled' && r.value.ok).length;
+        const failed = results.filter(r => r.status === 'rejected' || !r.value.ok)
+          .map(r => `${r.value ? r.value.name : '?'}: ${r.value ? (r.value.error || r.status) : r.reason.message}`).join('; ');
+        status.textContent = `Captured ${ok} of ${active.length} cameras`;
+        if (failed) status.textContent += ' — ' + failed;
+        status.className = ok === active.length ? 'success' : 'error';
+        loadCaptureHistory();
+        setTimeout(() => { status.textContent = ''; status.className = ''; }, 6000);
+      });
+    })
+    .catch(err => {
+      status.textContent = 'Capture all failed: ' + err.message;
+      status.className = 'error';
+      setTimeout(() => { status.textContent = ''; status.className = ''; }, 4000);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initWebSocket();
   document.getElementById('addCameraBtn').addEventListener('click', addCamera);
   document.getElementById('saveCameraBtn').addEventListener('click', initCameraForm);
+  document.getElementById('captureAllBtn').addEventListener('click', captureAll);
   document.getElementById('cancelCameraBtn').addEventListener('click', () => {
     document.getElementById('cameraForm').classList.add('hidden');
     document.getElementById('editCameraId').value = '';

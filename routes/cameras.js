@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../data/store');
+const scheduler = require('../services/scheduler');
 
 // GET /api/cameras - list all cameras
 router.get('/', (req, res) => {
@@ -57,11 +58,14 @@ router.put('/:id', (req, res) => {
 // DELETE /api/cameras/:id - delete a camera
 router.delete('/:id', (req, res) => {
   try {
+    for (const s of db.prepare('SELECT id FROM schedules WHERE camera_id = ?').all(req.params.id)) {
+      scheduler.removeSchedule(s.id);
+    }
     const result = db.prepare('DELETE FROM cameras WHERE id = ?').run(req.params.id);
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Camera not found' });
     }
-    // Also deletes stream_status and cascades to other tables via FK
+    // stream_status, captures, and schedules cascade via FK
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: err.message });

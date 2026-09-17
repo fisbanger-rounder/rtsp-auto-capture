@@ -6,6 +6,7 @@ const config = require('../config');
 const dbPath = path.join(config.dataDir, 'rtsp.db');
 fs.mkdirSync(config.dataDir, { recursive: true });
 const db = new Database(dbPath);
+db.pragma('foreign_keys = ON');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS cameras (
