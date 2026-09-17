@@ -8,8 +8,19 @@ function sanitizeName(name) {
   return String(name || 'camera').replace(/[^a-zA-Z0-9_-]+/g, '_');
 }
 
+// These cameras/NVRs only serve one RTSP session at a time. If the 15s monitor
+// probe overlaps a capture (or two captures) for the same URL, the extra session
+// is refused and the camera looks "offline". Serialize all RTSP access per URL.
+const streamQueues = new Map();
+function withStreamLock(url, fn) {
+  const prev = streamQueues.get(url) || Promise.resolve();
+  const run = prev.then(fn, fn);
+  streamQueues.set(url, run.then(() => {}, () => {}));
+  return run;
+}
+
 function probeStream(rtspUrl, timeoutMs) {
-  return new Promise((resolve) => {
+  return withStreamLock(rtspUrl, () => new Promise((resolve) => {
     const timeout = timeoutMs || config.streamTimeoutSeconds * 1000;
     execFile(
       'ffprobe',
@@ -17,11 +28,11 @@ function probeStream(rtspUrl, timeoutMs) {
       { timeout },
       (error) => resolve(!error)
     );
-  });
+  }));
 }
 
 function captureFrame(rtspUrl, cameraName, cameraId) {
-  return new Promise((resolve, reject) => {
+  return withStreamLock(rtspUrl, () => new Promise((resolve, reject) => {
     const captureDir = path.join(config.captureDir, String(cameraId));
     fs.mkdirSync(captureDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -38,7 +49,7 @@ function captureFrame(rtspUrl, cameraName, cameraId) {
         else resolve(filePath);
       }
     );
-  });
+  }));
 }
 
 function monitorStreams(cameras, callback) {
